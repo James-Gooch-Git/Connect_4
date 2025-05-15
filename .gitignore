@@ -1,0 +1,68 @@
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+*.env
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Machine Learning models and serialized data
+*.joblib
+*.pkl
+*.h5
+*.model
+*.sav
+*.ckpt
+
+# Data and logs
+*.csv
+*.tsv
+*.data
+*.log
+*.json
+*.npz
+*.npy
+ml/connect-4.data
+ml/ml_log.txt
+
+# Generated plots or output files
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
+
+# Output folders you may generate
+outputs/
+logs/
+
+# Evaluation-specific outputs
+evaluation/
+ml/replay_buffer.json
+
+# Jupyter Notebook internals
+.ipynb_checkpoints/
+
+# IDE/editor config files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Miscellaneous
+*.bak
+*.swp
+
+# Exceptions: Keep important folders or files manually
+!README.md
+!.gitignore
+!main.py
