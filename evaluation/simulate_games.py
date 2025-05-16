@@ -52,71 +52,6 @@ def random_move_wrapped(board, my_disc, opp_disc):
 
 
 
-# def simulate_game(agent1, agent2):
-#     board = create_board()
-#     ml_board_states = []
-    
-#     # Determine which agent is the ML agent (if any)
-#     ml_agent_idx = None
-#     if agent1 == ml_move:
-#         ml_agent_idx = 0
-#     elif agent2 == ml_move:
-#         ml_agent_idx = 1
-    
-#     # Randomly choose who goes first
-#     player_turn = random.choice([0, 1])
-#     first_player = player_turn
-#     agents = [agent1, agent2]
-    
-#     # Always assign circle ('○') to ML agent if it's playing
-#     if ml_agent_idx is not None:
-#         discs = ['●', '●']  # Default both to filled
-#         discs[ml_agent_idx] = '○'  # ML agent gets circle
-#     else:
-#         discs = ['●', '○']  # Default assignment if no ML agent
-    
-#     move_count = 0
-
-#     while True:
-#         current_agent = agents[player_turn]
-#         col = current_agent(board, discs[player_turn], discs[1 - player_turn])
-#         current_agent = agents[player_turn]
-#         col = current_agent(board, discs[player_turn], discs[1 - player_turn])
-#         if col is None or board[0][col] != ' ':
-#             print(f"⚠️ Invalid move by agent {player_turn} ({'Agent 1' if player_turn == 0 else 'Agent 2'})")
-#             print(f"Returned column: {col}")
-#             print_board(board)
-#             winner = 1 - player_turn
-#             return f"{winner}-wins-{first_player}", False
-
-#         if (current_agent == ml_move) and (discs[player_turn] == '○'):
-#             from agents.ml_agent import board_to_input
-#             ml_board_states.append(board_to_input(board))
-
-#         row, _ = drop_disc(board, col, discs[player_turn])
-
-#         if is_winning_move(board, row, col, discs[player_turn]):
-#             # ML agent *just lost* if it is NOT the winning player
-#             if ml_agent_idx is not None:
-#                 # Determine if ML agent lost or won
-#                 outcome = "loss" if player_turn != ml_agent_idx else "win"
-#                 if ml_board_states:
-#                     save_failed_game(ml_board_states, outcome)
-#             ml_lost = (ml_agent_idx is not None and player_turn != ml_agent_idx)
-#             return f"{player_turn}-wins-{first_player}", ml_lost
-
-#         if is_draw(board):
-#             # ML agent played to a draw
-#             if ml_agent_idx is not None and ml_board_states:
-#                 save_failed_game(ml_board_states, "draw")
-#             return f"draw-{first_player}", False
-
-
-#         player_turn = 1 - player_turn
-
-# Keep all your imports and other functions above this
-def random_move_wrapped(board, my_disc, opp_disc):
-    return random_move(board, my_disc, opp_disc)
 
 
 
@@ -128,25 +63,28 @@ def simulate_game(agent1, agent2, verbose=False):
     threats_blocked = {0: 0, 1: 0}
     ml_board_states = []
 
-    # Determine which player is ML
-    ml_agent_idx = None
-    if agent1 == ml_move:
-        ml_agent_idx = 0
-    elif agent2 == ml_move:
-        ml_agent_idx = 1
-
-    # Force ML agent to always play as ○ for consistency
-    discs = ['○', '●'] if ml_agent_idx == 0 else ['●', '○']
-
     player_turn = random.choice([0, 1])
     first_player = player_turn
     agents = [agent1, agent2]
+
+    # ✅ Identify ML player
+    ml_agent_idx = 0 if agent1 == ml_move else 1 if agent2 == ml_move else None
+
+    # ✅ Always assign ML to '○'
+    if ml_agent_idx == 0:
+        discs = ['○', '●']
+    elif ml_agent_idx == 1:
+        discs = ['●', '○']
+    else:
+        discs = ['●', '○']  # Default if ML is not involved
+
+    print(f"🎮 Agent 1: {agent1.__name__} as {discs[0]}")
+    print(f"🎮 Agent 2: {agent2.__name__} as {discs[1]}")
 
     game_over = False
     winner_idx = None
     win_type = None
     total_moves = 0
-
     metrics = {'nodes_expanded': [], 'max_depth': [], 'branching_factor': [], 'nodes_pruned': []}
 
     while not game_over:
@@ -154,41 +92,43 @@ def simulate_game(agent1, agent2, verbose=False):
         disc = discs[player_turn]
 
         valid_moves = get_valid_moves(board)
-
         if not valid_moves:
             break
 
-        # Track memory before move
-        # Track memory before move
         proc = psutil.Process()
         mem_before = proc.memory_info().rss / 1024
-
         start = time.time()
+
         try:
-            move_result = agent(board, disc, discs[1 - player_turn])
+            if agent == ml_move:
+                move_result = ml_move(board, my_disc=disc, opp_disc=discs[1 - player_turn])
+            else:
+                move_result = agent(board, disc, discs[1 - player_turn])
         except TypeError as e:
             raise RuntimeError(f"{agent.__name__}() failed: {e}")
+
         duration = time.time() - start
-
-
         mem_after = proc.memory_info().rss / 1024
         move_durations[player_turn].append(duration)
         move_durations['memory_usage'][player_turn].append(mem_after - mem_before)
 
-
         # Log ML board state
         if ml_agent_idx == player_turn:
-            ml_board_states.append(board_to_input(board))
+            from agents.ml_agent import board_to_input, flip_perspective
+            input_vec = board_to_input(board)
+            if discs[player_turn] == '○':
+                input_vec = flip_perspective(input_vec)
+            ml_board_states.append(input_vec)
 
         col = move_result if isinstance(move_result, int) else move_result[0]
         row, success = drop_disc(board, col, disc)
         if not success:
             break
 
-        # Heuristic stub: use simple piece count for now
+        # Heuristic scoring
         heuristic_scores[player_turn].append(sum(row.count(disc) for row in board))
 
-        # Blocked threats (rudimentary version)
+        # Threat evaluation
         for threat_col in get_valid_moves(board):
             temp_board = copy.deepcopy(board)
             r, _ = drop_disc(temp_board, threat_col, discs[1 - player_turn])
@@ -202,20 +142,19 @@ def simulate_game(agent1, agent2, verbose=False):
             game_over = True
             winner_idx = player_turn
             win_type = is_winning_move(board, row, col, disc, return_type=True)
+
         elif is_draw(board):
             game_over = True
             win_type = "draw"
 
         player_turn = 1 - player_turn
 
-    # Log game outcome for ML agent
+    # Save result to replay buffer
     if ml_agent_idx is not None and ml_board_states:
-        if winner_idx is None:
-            outcome = "draw"
-        else:
-            outcome = "win" if winner_idx == ml_agent_idx else "loss"
+        outcome = "draw" if winner_idx is None else "win" if winner_idx == ml_agent_idx else "loss"
         save_failed_game(ml_board_states, outcome)
 
+        # Retrain if ML loses repeatedly
         if outcome == "loss":
             simulate_game.ml_losses += 1
             if simulate_game.ml_losses % 20 == 0:
@@ -242,7 +181,6 @@ def simulate_game(agent1, agent2, verbose=False):
         threats_faced,
         threats_blocked
     )
-
 # Track ML losses across simulations
 simulate_game.ml_losses = 0
 def plot_memory_usage(memory_usage_data, agent_labels, save_path="evaluation/memory_usage.png"):
@@ -391,9 +329,9 @@ def run_simulations(agent1, agent2, n=500):
         
         if ml_lost:
             ml_losses += 1
-            # if ml_losses % 20 == 0:
-            #     print("♻️ Retraining model after 20 ML losses...")
-            #     os.system("python ml/train_model.py") # Keep commented
+            if ml_losses % 20 == 0:
+                print("♻️ Retraining model after 20 ML losses...")
+                os.system("python ml/train_model.py") # Keep commented
 
 
     return (
@@ -449,11 +387,6 @@ def plot_heuristic_score_distribution(heuristic_scores, agent_labels, filename):
 
 
 
-# --------------------------------------------------------------------------------------
-# REVISED save_results function to display/save average move duration per agent
-# --------------------------------------------------------------------------------------
-# save_results now accepts 6 arguments: name1, name2, results_counts, aggregated_minimax_metrics, agent1, agent2
-# We need to add aggregated_agent_move_durations as a 7th argument
 def save_results(
     name1,
     name2,
@@ -704,12 +637,8 @@ def save_results(
 
 
 
-# --------------------------------------------------------------------------------------
-# REVISED run_selected_vs_all to correctly unpack results and pass to save_results
-# --------------------------------------------------------------------------------------
-# run_selected_vs_all now unpacks 3 return values from run_simulations
-# and passes 7 arguments to save_results
-def run_selected_vs_all(n=500):
+
+def run_selected_vs_all(n=100):
     agents = {
         "Random": random_move_wrapped,
         "Smart": smart_move,
@@ -805,45 +734,6 @@ def run_selected_vs_all(n=500):
             aggregated_threats_blocked,
             aggregated_memory_usage
         )
-# Run the main simulation function
-if __name__ == "__main__":
-    run_selected_vs_all(n=500)
 
-# ----------------------------------------------
-# 💡 Optional: Single matchup mode — enable if needed
-# ----------------------------------------------
-# if __name__ == "__main__":
-#     results = run_simulations(agent1=ml_move, agent2=minimax_move, n=100)
-#     for k, v in results.items():
-#         print(f"{k}: {v}")
-#
-#     categories = [
-#         "ML Wins (First)", "ML Wins (Second)",
-#         "Minimax Wins (First)", "Minimax Wins (Second)",
-#         "Draws (ML First)", "Draws (Minimax First)"
-#     ]
-#     values = [
-#         results['agent1_wins_first'],
-#         results['agent1_wins_second'],
-#         results['agent2_wins_first'],
-#         results['agent2_wins_second'],
-#         results['draws_first'],
-#         results['draws_second']1
-#     ]
-#
-#     plt.figure(figsize=(10, 6))
-#     plt.bar(categories, values)
-#     plt.title("ML vs Minimax Outcomes")
-#     plt.ylabel("Games")
-#     plt.xticks(rotation=45)
-#     plt.tight_layout()
-#     plt.grid(axis='y', linestyle='--', alpha=0.7)
-#     plt.savefig("evaluation/game_results_ml_vs_minimax.png")
-#     plt.show()
-#
-#     with open("evaluation/game_results_ml_vs_minimax.csv", 'w', newline='') as file:
-#         writer = csv.writer(file)
-#         writer.writerow(['Outcome', 'Count'])
-#         for label, value in zip(categories, values):
-#             writer.writerow([label, value])
-#     print("✅ Results saved to CSV and PNG.")
+if __name__ == "__main__":
+    run_selected_vs_all(n=100)

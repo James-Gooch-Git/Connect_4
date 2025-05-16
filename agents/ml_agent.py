@@ -1,13 +1,16 @@
 import joblib
-import os
+
 import copy
 import numpy as np
 import pandas as pd
 from connect4 import get_valid_moves, drop_disc
-from ml.replay_logger import save_failed_game
-
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 # Load the latest trained model
-with open("ml/model_latest.joblib", "rb") as f:
+
+model_path = os.path.join(os.path.dirname(__file__), "..", "ml", "model_PLEASE.joblib")
+with open(model_path, "rb") as f:
     model = joblib.load(f)
 
 def flip_perspective(vec):
@@ -26,6 +29,7 @@ def board_to_input(board):
     return flat
 
 def ml_move(board, my_disc='○', opp_disc='●'):
+   # print(f"🔍 ML is making a move as {my_disc}")
     valid_moves = get_valid_moves(board)
     best_col = None
     best_score = -1
